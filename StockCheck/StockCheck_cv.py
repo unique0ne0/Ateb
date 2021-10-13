@@ -114,28 +114,35 @@ def select_Mode():
     while True:
 
         print("\n\n======== 품단종 처리 ========")
-        print("1. 원장 생성")
-        print("2. 품단종 처리")
-        print("3. 재수집 링크 생성")
-        print("4. 셀러고 전처리 - 여러 엑셀모으기")
-        print("5. 셀러고 전처리 - 한줄 만들기")
-        print("6. 셀러고 - 옵션품절")
-        print("7. 셀러고 - 판매재개")
+        print("1. 신규 원장 생성")
+        print("2. 기존 원장 업데이트")
+        print("3. 품절/재입고 처리 - 전체 수집")
+        print("4. 품절/재입고 처리 - 일부 수집 내용만 반영")
+        print("5. 재수집 링크 생성")
+        print("6. 셀러고 전처리 - 여러 엑셀모으기")
+        print("7. 셀러고 전처리 - 한줄 만들기")
+        print("8. 셀러고 - 옵션품절")
+        print("9. 셀러고 - 판매재개")
         print("0. 종료")
+
 
         mode = int(input("\nSelect Mode : "))
 
         if mode == 1:
             return "CREATE_SB"
         elif mode == 2:
-            return "CHECK_SO"
+            return "UPDATE_SB"
         elif mode == 3:
-            return "MAKE_LINK"
+            return "UPDATE_SO_T"
+        elif mode == 4:
+            return "UPDATE_SO_P"
         elif mode == 5:
-            return "GATHER_XLS"
+            return "MAKE_LINK"
         elif mode == 6:
+            return "GATHER_XLS"
+        elif mode == 8:
             return "SLG_OSO"
-        elif mode == 7:
+        elif mode == 9:
             return "SLG_SA"
         elif mode == 0:
             return "EXIT"
@@ -242,6 +249,14 @@ def make_OptionInfoData(type, option_cate, option_info):
     return option_info_list
 
 
+def excel_Visible():
+    # from win32com.client import Dispatch
+    excel = Dispatch('Excel.Application')
+    excel.Visible = True
+    excel.ScreenUpdating = True
+    excel.DisplayAlerts = True
+    excel.EnableEvents = True
+
 def autofit_ColumnSize(mode, target_filename):
     excel = Dispatch("Excel.Application")
     wb = excel.Workbooks.Open(target_filename)
@@ -273,14 +288,56 @@ def autofit_ColumnSize(mode, target_filename):
     wb.Save()
     wb.Close()
 
-def excel_Visible():
-    # from win32com.client import Dispatch
-    excel = Dispatch('Excel.Application')
-    excel.Visible = True
-    excel.ScreenUpdating = True
-    excel.DisplayAlerts = True
-    excel.EnableEvents = True
+    # excel_Visible()
 
+
+def find_SourceCode(source_code, target_code_list):
+    for index, target_code in enumerate(target_code_list):
+        if source_code == target_code:
+            return index
+    return -1
+
+
+def isIn_SourceOptionList(source_list, update_list):
+    for update_option in update_list:
+        for source_option in source_list:
+            if update_option == source_option:
+                return True
+    return False
+
+
+def open_SourceUpdateExcel(mode):
+    """
+    기준 원장과 업데이트 파일을 열어서 백업하고 파일명 리턴
+    mode : UPDATE_SB, UPDATE_SO
+    :return: source_filename, update_filename
+    """
+
+    # 원장엑셀 오픈
+    print(reset)
+    source_filename = open_ExcelFile("원장 엑셀파일 선택")  # 원장 선택
+
+    print(f"=> 기준 원장 엑셀 파일 선택 : {source_filename}")
+    logger.info(f"=> 기준 원장 엑셀 파일 선택 : {source_filename}")
+
+    # 원장엑셀 백업
+    backup_filename = source_filename[:-5] + NOW + "_BU.xlsx"
+    shutil.copy2(source_filename, backup_filename)
+
+    print(f"==> 백업파일 저장  : {backup_filename}")
+    logger.info(f"==> 백업파일 저장  : {backup_filename}")
+
+    # 수집엑셀 오픈
+    if mode == "UPDATE_SB":
+        update_filename = open_ExcelFile("업데이트할 누적데이터 엑셀파일 선택")  # 수집 데이터 선택
+        print(f"=> 업데이트할 누적데이터 : {update_filename}")
+        logger.info(f"=> 업데이트할 누적데이터 : {update_filename}")
+    elif mode == "UPDATE_SO_T" or mode == "UPDATE_SO_P":
+        update_filename = open_ExcelFile("업데이트할 수집 엑셀파일 선택")  # 수집 데이터 선택
+        print(f"=> 업데이트할 신규수집 엑셀 : {update_filename}")
+        logger.info(f"=> 업데이트할 신규수집 엑셀 : {update_filename}")
+
+    return source_filename, update_filename
 
 def create_SB():
     """
@@ -330,20 +387,22 @@ def create_SB():
             continue  # 작업안된 것은 패스
         n_option = count_OptionNumber(source_sheet[row_ptr, "옵션정보"])
 
-        target_sheet[target_row_ptr, 0] = row_ptr
-        target_sheet[target_row_ptr, 1] = source_product_code
-        target_sheet[target_row_ptr, 2] = source_product_name
-        target_sheet[target_row_ptr, 3] = target_sheet[target_row_ptr, 11] = "신규"
-        target_sheet[target_row_ptr, 4] = source_sheet[row_ptr, "옵션입력"]
-        target_sheet[target_row_ptr, 5] = n_option
-        target_sheet[target_row_ptr, 7] = TODAY + NOW
-        target_sheet[target_row_ptr, 8] = source_sheet[
+        target_sheet[target_row_ptr, "연번"] = target_row_ptr
+        target_sheet[target_row_ptr, "상품코드"] = source_product_code
+        target_sheet[target_row_ptr, "변경상품명"] = source_product_name
+        target_sheet[target_row_ptr, "상태"] = target_sheet[target_row_ptr, "상태1"] = "신규"
+        target_sheet[target_row_ptr, "옵션입력"] = source_sheet[row_ptr, "옵션입력"]
+        target_sheet[target_row_ptr, "옵션개수"] = n_option
+        target_sheet[target_row_ptr, "업데이트"] = TODAY + NOW
+        target_sheet[target_row_ptr, "원본경로"] = source_sheet[
             row_ptr, source_sheet.number_of_columns() - 1
         ]
+
         actual_data += 1
 
         if n_option == 0:
-            target_sheet[target_row_ptr, 10] = 999
+            target_sheet[target_row_ptr, "재고1"] = 999
+            # target_sheet[target_row_ptr, 10] = 999
         else:
             # 옵션정보 리스트 생성
             option_list = make_OptionInfoData(
@@ -355,31 +414,93 @@ def create_SB():
         target_row_ptr += 1
 
     # 생성된 엑셀 저장
-    print(f"  {passed_data} items passed from {source_sheet.number_of_rows()}")
-    print(f"  Finally {actual_data} Data Saved to >> ", target_filename)
+    print(f"  >> {passed_data} items passed from {source_sheet.number_of_rows()}")
+    print(f"  >> Finally {actual_data} Data Saved to >> ", target_filename)
 
     target_sheet.save_as(target_filename)
 
     # 열넓이 조정
     autofit_ColumnSize("O", target_filename)
 
+def update_SB(mode):
+    """
+    기존 원장에 없는 신규 누적데이터 추가
 
-def find_SourceCode(source_code, target_code_list):
-    for index, target_code in enumerate(target_code_list):
-        if source_code == target_code:
-            return index
-    return -1
+    기준 원장과 신규 누적데이터 열어서
+    기준 원장에 없는 상품과 옵션 추가
+    """
+
+    # 데이터 오픈
+    source_filename, update_filename = open_SourceUpdateExcel(mode)
+
+    update_sheet = pyexcel.get_sheet(
+        file_name=update_filename, name_columns_by_row=0
+    )
+    source_sheet = pyexcel.get_sheet(
+        file_name=source_filename, name_columns_by_row=0
+    )
+
+    source_product_code_list = source_sheet.column["상품코드"]
+    source_row_ptr = source_sheet.number_of_rows()
+    n_not_processed_data = 0 # 작업전으로 패스한 데이터
+    n_included_data = 0 # 소스에 있어서 패스한 데이터
+    n_added_data = 0 # 추가된 데이터
+
+    update_product_code_list = update_sheet.column["상품코드"]
+
+    for update_row_ptr, update_product_code in enumerate(update_product_code_list):
+
+        update_product_name = update_sheet[update_row_ptr, "변경상품명"]
+        update_my_link = update_sheet[update_row_ptr, "마이링크"]
+        n_option = count_OptionNumber(update_sheet[update_row_ptr, "옵션정보"])
+
+        if update_my_link == "" or update_my_link == None or update_my_link.find("_") == -1:
+            n_not_processed_data += 1
+            continue  # 작업안된 것은 패스
+
+        if update_product_code in source_product_code_list:
+            # 상품코드가 기존 원장에 있으면
+            n_included_data += 1
+            continue
+        else: # 상품코드가 기존 원장에 없으면 기존 원장 끝에 추가
+            source_sheet[source_row_ptr, "연번"] = source_row_ptr
+            source_sheet[source_row_ptr, "상품코드"] = update_product_code
+            source_sheet[source_row_ptr, "변경상품명"] = update_product_name
+            source_sheet[source_row_ptr, "상태"] = source_sheet[source_row_ptr, "상태1"] = "신규"
+            source_sheet[source_row_ptr, "옵션입력"] = update_sheet[update_row_ptr, "옵션입력"]
+            source_sheet[source_row_ptr, "옵션개수"] = n_option
+            source_sheet[source_row_ptr, "업데이트"] = TODAY + NOW
+            source_sheet[source_row_ptr, "원본경로"] = update_sheet[
+                update_row_ptr, update_sheet.number_of_columns() - 1
+            ]
+            n_added_data += 1
+            print(f"  >> {n_added_data} : {update_product_code} {update_product_name} added to row {source_row_ptr}.. ")
+
+            if n_option == 0: # 단일상품 재고, 상태 처리
+                source_sheet[source_row_ptr, "재고1"] = 999
+                print(f"  >> {n_added_data} : => 단일상품 ")
+
+            else: # 옵션있는 상품이면 옵션정보 리스트 생성
+                option_list = make_OptionInfoData(
+                    "NEW", update_sheet[update_row_ptr, "옵션명"], update_sheet[update_row_ptr, "옵션정보"]
+                )
+
+                for col_ptr, option_value in enumerate(option_list):
+                    source_sheet[source_row_ptr, DEFAULT_N_HEADER + col_ptr] = option_value
+                print(f"  >> {n_added_data} : => 옵션상품 {option_list}")
+            source_row_ptr += 1
+
+    # 생성된 엑셀 저장
+    print(f" =>> {n_included_data} items already included.. ")
+    print(f" =>> not finished {n_not_processed_data} items passed.. ")
+
+    print(f" =>> Finally {n_added_data} Data Updated to >> ", source_filename)
+
+    source_sheet.save_as(source_filename)
 
 
-def isIn_SourceOptionList(source_list, update_list):
-    for update_option in update_list:
-        for source_option in source_list:
-            if update_option == source_option:
-                return True
-    return False
 
-
-def check_SO():
+def update_SO(mode):
     """
     품절 확인
     기준원장과 상품수집엑셀 비교하여 품절 / 옵션품절 판정 및 기준원장 업데이트
@@ -390,31 +511,11 @@ def check_SO():
     """
 
     # 원장엑셀 오픈
-    print(">> 기준 원장 엑셀 파일 선택 ")
-    source_filename = open_ExcelFile("원장 엑셀파일 선택")  # 원장 선택
-
-    logger.info(f">> 기준 원장 엑셀 파일 선택 : {source_filename}")
-
-    # 원장엑셀 백업
-    print(">> 백업파일 저장 ")
-    backup_filename = source_filename[:-5] + NOW + "_BU.xlsx"
-    shutil.copy2(source_filename, backup_filename)
-
-    logger.info(f">> 백업파일 저장  : {backup_filename}")
-
-    # 수집엑셀 오픈
-    print(">> 수집된 엑셀파일 선택 ")
-    update_data_filename = open_ExcelFile("수집 엑셀파일 선택")  # 수집 데이터 선택
-
-    logger.info(f">> 수집된 엑셀파일 선택 : {update_data_filename}")
+    source_filename, update_filename = open_SourceUpdateExcel(mode)
 
     # 데이터 리딩 준비
-    update_sheet = pyexcel.get_sheet(
-        file_name=update_data_filename, name_columns_by_row=0
-    )
-    source_sheet = pyexcel.get_sheet(
-        file_name=source_filename, name_columns_by_row=0
-    )
+    update_sheet = pyexcel.get_sheet(file_name=update_filename, name_columns_by_row=0)
+    source_sheet = pyexcel.get_sheet(file_name=source_filename, name_columns_by_row=0)
 
     source_product_code_list = source_sheet.column["상품코드"]
     source_product_name_list = source_sheet.column["변경상품명"]
@@ -435,8 +536,6 @@ def check_SO():
 
     SO_row_ptr = 0  # 결과 엑셀 행포인터
     SA_row_ptr = 0
-
-    option_type_changed_list = []
 
     # 판정 루프 ; 소스 상품별 루프
 
@@ -470,13 +569,14 @@ def check_SO():
 
         PRE1_ONLYIN_SOURCE = 0
 
-        # if PRE1_OPTION_TYPE_CHANGED != 1:
-
-        print(color_red + "  > 전처리 1 : 업데이트 목록 포함여부 확인")
-        logger.info("  > 전처리 1 : 업데이트 목록 포함여부 확인")
+        if mode == "UPDATE_SO_P":
+            print(color_red + "  > 전처리 1 =>> 실행모드에 의해 미수행")
+            logger.info("  > 전처리 1 =>> 실행모드에 의해 미수행")
+        else:
+            print(color_red + "  > 전처리 1 : 업데이트 목록 포함여부 확인")
+            logger.info("  > 전처리 1 : 업데이트 목록 포함여부 확인")
 
         # 업데이트 포함여부 판정
-        # source_status = source_sheet[source_code_row_index, '상태'] # 소스 상태
         PRE1_ONLYIN_SOURCE = 0
         update_code_row_index = find_SourceCode(
             source_product_code, update_product_code_list
@@ -528,12 +628,9 @@ def check_SO():
             update_stock = int(
                 update_sheet[update_code_row_index, "재고수량"]
             )  # 업데이트 재고수량
-        elif update_code_row_index == -1:  # 업데이트 목록에 없으면
-            #  # 업데이트 목록에 없으면
+        elif mode == "UPDATE_SO_T" and update_code_row_index == -1:  # 모드 T + 업데이트 목록에 없으면 품절처리
 
-            # print(color_red + '  > 전처리 1 : 업데이트 파일에 수집 누락이면 단종 품절 처리')
             PRE1_ONLYIN_SOURCE = 1
-            # update_n_option = ""
             update_stock = 0
             print(
                 f"{source_code_row_index} : {source_product_code}  ==> {update_code_row_index} : 업데이트 목록에 없음 "
@@ -545,11 +642,6 @@ def check_SO():
             current_update_option_list = []
             current_update_stock_list = []
             current_update_status_list = []
-
-            # if PRE1_OPTION_TYPE_CHANGED == 1:
-            #     print(color_red + '  > 전처리 2 : 옵션입력 변경으로 PASS')
-            #     logger.info('  > 전처리 2 : 옵션입력 변경으로 PASS')
-            # else:
 
             # PRE1_ONLYIN_SOURCE = 1
 
@@ -639,10 +731,6 @@ def check_SO():
 
                 print("  > 전처리 2 => 옵션입력 변경으로 단종 품절 처리")
                 logger.info("  > 전처리 2 => 옵션입력 변경으로 단종 품절 처리")
-                # print(f"  > 전처리 1 => >> option_type_changed_list에 {source_sheet[source_code_row_index, '상품코드']} 추가")
-                # logger.info(f"  > 전처리 1 => >> option_type_changed_list에 {source_sheet[source_code_row_index, '상품코드']} 추가")
-                #
-                # option_type_changed_list.append(source_sheet[source_code_row_index, '상품코드'])
 
                 PRE2_OPTION_TYPE_CHANGED = 1
 
@@ -717,8 +805,6 @@ def check_SO():
 
             SA_ADDED = 0
             LIST_UPDATED = 0
-
-            # if isIn_SourceOptionList(current_source_option_list, current_update_option_list) == False:
 
             # 현재 업데이트 옵션이 원장에 없으면
             for update_option_index, current_update_option in enumerate(
@@ -818,6 +904,11 @@ def check_SO():
             logger.info("  > 전처리 3 => 전처리 1, 2 결과에 의해 PASS")
 
         # 메인: 소스와 업데이트에 모두 있는 옵션은 업데이트하고 품절/판매중처리
+
+        if mode == "UPDATE_SO_P" and find_SourceCode(source_product_code, update_product_code_list) == -1: # 모드 T + 소스에 없으면
+            print(color_green + "  > 메인 =>> 실행모드에 의거 미수행")
+            logger.info("  > 메인 =>> 실행모드에 의거 미수행")
+            continue
 
         print(color_green + "  > 메인 : 원장 분석")
         logger.info("  > 메인 : 원장 분석")
@@ -935,10 +1026,6 @@ def check_SO():
                 current_source_status_list.append(
                     source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3 + 2]
                 )
-            #
-            # current_update_option_list = make_OptionInfoData('UPDATE', update_sheet[update_code_row_index, '옵션명'], update_sheet[update_code_row_index, '옵션정보'])[::3]
-            # current_update_stock_list = make_OptionInfoData('UPDATE', update_sheet[update_code_row_index, '옵션명'], update_sheet[update_code_row_index, '옵션정보'])[1::3]
-            # current_update_status_list = make_OptionInfoData('UPDATE', update_sheet[update_code_row_index, '옵션명'], update_sheet[update_code_row_index, '옵션정보'])[2::3]
 
             print(color_red + "  > 메인 => 옵션상품 => 옵션 분석")
             logger.info("  > 메인 => 옵션상품 => 옵션 분석")
@@ -992,9 +1079,8 @@ def check_SO():
                         source_code_row_index,
                         DEFAULT_N_HEADER + current_source_option_index * 3 + 2,
                     ] = "품절"
-                    # print(f'  > 메인 => 옵션상품 >> 전처리 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}')
-                    # logger.info(f'  > 메인 => 옵션상품 >> 전처리 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}')
                     continue
+
                 # 현재 옵션이 업데이트옵션목록에 없으면 품절처리하고 다음옵션으로 ; 윗줄 전처리때문에 실제로는 실행되지 않음.
                 if current_source_option not in current_update_option_list:
                     OSO_list.append(
@@ -1051,7 +1137,6 @@ def check_SO():
                             logger.info(
                                 f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} 재고있음 >> 옵션 판매중 처리"
                             )
-                            # source_sheet[source_code_row_index, '체크'] = 'V'
                             source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                             # 품절->판매중 변경시 판매재개로
                             if current_source_option_status == "품절":
@@ -1132,7 +1217,6 @@ def check_SO():
                             # 품절 아닌것->품절은 옵션품절로
                             if current_source_option_status != "품절":
                                 OSO_count += 1
-                                # OSO_list.append(source_sheet[source_code_row_index, '상품코드'] + " " + source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3])
                                 OSO_list.append(
                                     source_sheet[source_code_row_index, "상품코드"]
                                     + " "
@@ -1212,16 +1296,6 @@ def check_SO():
                         f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
                     )
                 #OSO list에서는 OSO 제거
-                # for idx, soldout_option in enumerate(OSO_list):
-                #     if soldout_option.split()[0] == source_product_code:
-                #         print(
-                #             f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거"
-                #         )
-                #         logger.info(
-                #             f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거"
-                #         )
-                #         del OSO_link_list[OSO_list.index(soldout_option)]
-                #         OSO_list.remove(soldout_option)
                 idx = 0
                 while idx < len(OSO_list):
                     soldout_option = OSO_list[idx]
@@ -1243,16 +1317,11 @@ def check_SO():
                 logger.info(f"   ----> >> 전체옵션 옵션품절 처리")
             print(reset)
 
-    # OSO_set = set(OSO_list)
-    # OSO_list = list(OSO_set)
-
     for row_ptr, OSO in enumerate(OSO_list):
         OSO_sheet[row_ptr, 0] = OSO
         OSO_sheet[row_ptr, 1] = OSO_link_list[row_ptr]
 
     if len(OSA_list) != 0:
-        # OSA_set = set(OSA_list)
-        # OSA_list = list(OSA_set)
         for row_ptr, OSA in enumerate(OSA_list):
             OSA_sheet[row_ptr, 0] = OSA
             OSA_sheet[row_ptr, 1] = OSA_link_list[row_ptr]
@@ -1683,13 +1752,18 @@ def main():
     EXIT = True
 
     while EXIT:
+
         # try:
         mode = select_Mode()
 
         if mode == "CREATE_SB":
             create_SB()
-        elif mode == "CHECK_SO":
-            check_SO()
+        elif mode == "UPDATE_SB":
+            update_SB(mode)
+        elif mode == "UPDATE_SO_T":
+            update_SO(mode)
+        elif mode == "UPDATE_SO_P":
+            update_SO(mode)
         elif mode == "GATHER_XLS":
             gather_Excel()
         elif mode == "MAKE_LINK":
