@@ -1419,13 +1419,15 @@ def gather_Files():
     print("2. OSA")
     print("0. Back to Main Menu")
 
-    while mode != 1 and mode != 2 and mode !=3:
+    while True:
         mode = int(input("어떤 파일을 모으시겠습니까? : "))
 
         if mode == 1:
             file_type = "OSO"
+            break
         elif mode == 2:
             file_type = "OSA"
+            break
         elif mode == 0:
             return
 
@@ -1434,22 +1436,25 @@ def gather_Files():
         print("추가할 파일을 선택하세요.")
         files_list.append(open_ExcelFile(f"추가할 엑셀 파일 선택 - {file_type}"))
 
-        if input("더 추가하시겠습니까? (y/n) : ") == "n":
+        if input("\n더 추가하시겠습니까? (y/n) : ") == "n":
             break
 
     target_row = 0
-    target_file_name = file_type + TODAY + NOW + "-t.xlsx"
-    target_sheet = pyexcel.get_sheet()
+    target_file_name = initial_directory + file_type + "_" + TODAY + NOW + "-t.xlsx"
+    target_sheet = pyexcel.Sheet()
+    total_n_items = 0
 
     for file in files_list:
-        print(f"  >> adding data from {file}")
         current_book = pyexcel.get_book(file_name=file)
-        current_sheet = pyexcel.get_sheet(current_book[file_type])
-        for row in range(sheet.number_of_columns()):
+        current_sheet = current_book[file_type]
+        print(f"  >> adding data from {file} : {current_sheet.number_of_rows()} items")
+        total_n_items += current_sheet.number_of_rows()
+        for row in range(current_sheet.number_of_rows()):
             target_sheet[target_row, 0] = current_sheet[row, 0]
+            target_row += 1
 
-    print(f"  =>> Total data saved to {target_file_name}")
-    target_sheet.save_as(file_name=target_file_name)
+    print(f"  =>> Total data saved to {target_file_name} : {total_n_items} items")
+    target_sheet.save_as(target_file_name)
 
 
 def gather_Excel():
