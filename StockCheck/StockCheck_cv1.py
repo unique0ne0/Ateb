@@ -45,8 +45,8 @@ NOW = time.strftime("_%H%M")
 SOLD_OUT_LINE = 2
 HEADER_LIST = ["연번", "상품코드", "변경상품명", "상태", "옵션입력", "옵션개수", "OSO", "업데이트", "원본경로"]
 DEFAULT_N_HEADER = len(HEADER_LIST)
-# initial_directory = "D:/Dropbox/A-TEB/작업폴더/999.품단종처리/"
-initial_directory = "C:/Users/JK/Dropbox/A-TEB/작업폴더/999.품단종처리/"
+initial_directory = "D:/Dropbox/A-TEB/작업폴더/999.품단종처리/"
+# initial_directory = "C:/Users/JK/Dropbox/A-TEB/작업폴더/999.품단종처리/"
 NO = 1
 YES = 0
 color_green = fg("light_green")
@@ -718,7 +718,8 @@ def update_SO(mode):
                 logger.info(
                     f"  > 전처리 1 => 수집 누락 있음 >> {source_product_code} {source_product_name_list[source_code_row_index]} 현재 상태 {source_sheet[source_code_row_index, '상태']}"
                 )
-                if source_sheet[source_code_row_index, "상태"] != "품절":
+                # if source_sheet[source_code_row_index, "상태"] != "품절":
+                if source_status != "품절":
                     source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                     source_sheet[source_code_row_index, "상태"] = "전처리품절"
                     # 품절처리목록에 추가
@@ -774,7 +775,8 @@ def update_SO(mode):
                                 logger.info(
                                     f"  > 전처리 1 => >> OSO_list에 추가 {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
                                 )
-                elif source_sheet[source_code_row_index, "상태"] == "품절":
+                elif source_status == "품절":
+                # elif source_sheet[source_code_row_index, "상태"] == "품절":
                     print(f"  > 전처리 1 => >> 업데이트 누락 + 기존 상태 품절로 PASS")
                     logger.info(f"  > 전처리 1 => >> 업데이트 누락 + 기존 상태 품절로 PASS")
                     continue
@@ -800,7 +802,8 @@ def update_SO(mode):
                 PRE2_OPTION_TYPE_CHANGED = 1
 
                 # 품절아니면 품절로 상태 변경
-                if source_sheet[source_code_row_index, "상태"] != "품절":
+                if source_status != "품절":
+                # if source_sheet[source_code_row_index, "상태"] != "품절":
                     source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                     source_sheet[source_code_row_index, "상태"] = "전처리품절"
 
@@ -1346,18 +1349,20 @@ def update_SO(mode):
             if OSO_count == source_n_option:
                 print(f"   ----> >> 전체옵션 품절 처리")
                 logger.info(f"   ----> >> 전체옵션 품절 처리")
-                if source_sheet[source_code_row_index, "상태"] == "품절":
+                if source_status == "품절":
+                # if source_sheet[source_code_row_index, "상태"] == "품절":
                     # 기존에 상품상태가 품절로 이미 되어 있으면 PASS
                     print(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
                     logger.info(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
                 else:
                     # 기존에 품절이 아니면 품절로 변경하고 SO 리스트에 추가
-                    print(f"   ----> >> 전체옵션 품절 처리")
-                    logger.info(f"   ----> >> 전체옵션 품절 처리")
+                    print(f"   ----> >> 전체옵션 품절 처리 => {source_status} >> 품절로 변경")
+                    logger.info(f"   ----> >> 전체옵션 품절 처리 => {source_status} >> 품절로 변경")
                     source_sheet[source_code_row_index, "상태"] = "품절"
                     #SO list에 없으면 SO에 추가
-                    if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index,0 "상품코드"] not in SO_sheet.column[0]:
-                        if source_sheet[source_code_row_index,0 "상태"] != "품절"
+                    if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index, "상품코드"] not in SO_sheet.column[0]:
+                        if source_status != "품절":
+                        # if source_sheet[source_code_row_index, "상태"] != "품절":
                             SO_sheet[SO_row_ptr, 0] = source_product_code
                             SO_sheet[SO_row_ptr, 1] = source_product_name_list[
                                 source_code_row_index
@@ -1428,7 +1433,7 @@ def update_SO(mode):
     print(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
     logger.info(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
     SO_book.save_as(SO_filename)
-    SO_backup_filename = SO_filename[:-5] + "_" + TODAY[-4:] + NOW[-4:] + "_BU.xlsx"
+    SO_backup_filename = SO_filename[:-5] + "_" + TODAY[-2:] + NOW[-4:] + "_BU.xlsx"
     shutil.copy2(SO_filename, SO_backup_filename)
 
     print(
