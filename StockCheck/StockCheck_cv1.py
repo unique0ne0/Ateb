@@ -1356,21 +1356,22 @@ def update_SO(mode):
                     logger.info(f"   ----> >> 전체옵션 품절 처리")
                     source_sheet[source_code_row_index, "상태"] = "품절"
                     #SO list에 없으면 SO에 추가
-                    if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index, "상품코드"] not in SO_sheet.column[0]:
-                        SO_sheet[SO_row_ptr, 0] = source_product_code
-                        SO_sheet[SO_row_ptr, 1] = source_product_name_list[
-                            source_code_row_index
-                        ]
-                        SO_sheet[SO_row_ptr, 2] = source_product_link_list[
-                            source_code_row_index
-                        ]
-                        SO_row_ptr += 1
-                        print(
-                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
-                        )
-                        logger.info(
-                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
-                        )
+                    if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index,0 "상품코드"] not in SO_sheet.column[0]:
+                        if source_sheet[source_code_row_index,0 "상태"] != "품절"
+                            SO_sheet[SO_row_ptr, 0] = source_product_code
+                            SO_sheet[SO_row_ptr, 1] = source_product_name_list[
+                                source_code_row_index
+                            ]
+                            SO_sheet[SO_row_ptr, 2] = source_product_link_list[
+                                source_code_row_index
+                            ]
+                            SO_row_ptr += 1
+                            print(
+                                f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                            )
+                            logger.info(
+                                f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                            )
                     #OSO list에서는 OSO 제거
                     idx = 0
                     while idx < len(OSO_list):
