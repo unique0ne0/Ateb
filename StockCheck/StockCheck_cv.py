@@ -369,7 +369,7 @@ def create_SB():
 
     source_sheet = pyexcel.get_sheet(file_name=source_filename, name_columns_by_row=0)
 
-    target_filename = source_filename[:-5] + "_" + TODAY + NOW + "_원장.xlsx"
+    target_filename = source_filename[:-5] + "_" + TODAY[-4:] + NOW[-4:] + "_원장.xlsx"
     max_n_option = count_MaxOptionNumber(source_sheet.column["옵션정보"])
 
     target_sheet = pyexcel.Sheet()  # 새로운 엑셀 생성
@@ -542,6 +542,9 @@ def update_SO(mode):
     # 결과 엑셀파일 준비
 
     SO_filename = source_filename[:-18] + TODAY + NOW + "_SO.xlsx"  # 품절, 판매재개 파일
+
+    OS_backup_filename = source_filename[:-5] + TODAY[-4:] + NOW[-4:] + "_BU.xlsx"
+    shutil.copy2(source_filename, OS_backup_filename)
 
     SO_sheet = pyexcel.Sheet()
     SO_sheet[0,0] = ""
@@ -1292,36 +1295,44 @@ def update_SO(mode):
                 f'   ==> 옵션상품 {source_sheet[source_code_row_index, "상태"]} : 옵션 {source_n_option}개 중 {OSO_count}개 품절'
             )
             if OSO_count == source_n_option:
-                source_sheet[source_code_row_index, "상태"] = "품절"
                 print(f"   ----> >> 전체옵션 품절 처리")
                 logger.info(f"   ----> >> 전체옵션 품절 처리")
-                #SO list에 없으면 SO에 추가
-                if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index, "상품코드"] not in SO_sheet.column[0]:
-                    SO_sheet[SO_row_ptr, 0] = source_product_code
-                    SO_sheet[SO_row_ptr, 1] = source_product_name_list[
-                        source_code_row_index
-                    ]
-                    SO_sheet[SO_row_ptr, 2] = source_product_link_list[
-                        source_code_row_index
-                    ]
-                    SO_row_ptr += 1
-                    print(
-                        f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
-                    )
-                    logger.info(
-                        f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
-                    )
-                #OSO list에서는 OSO 제거
-                idx = 0
-                while idx < len(OSO_list):
-                    soldout_option = OSO_list[idx]
-                    if soldout_option.split()[0] == source_product_code:
-                        print(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
-                        logger.info(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
-                        del OSO_link_list[OSO_list.index(soldout_option)]
-                        OSO_list.remove(soldout_option)
-                        continue
-                    idx += 1
+                if source_sheet[source_code_row_index, "상태"] == "품절":
+                    # 기존에 상품상태가 품절로 이미 되어 있으면 PASS
+                    print(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
+                    logger.info(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
+                else:
+                    # 기존에 품절이 아니면 품절로 변경하고 SO 리스트에 추가
+                    print(f"   ----> >> 전체옵션 품절 처리")
+                    logger.info(f"   ----> >> 전체옵션 품절 처리")
+                    source_sheet[source_code_row_index, "상태"] == "품절"
+                    #SO list에 없으면 SO에 추가
+                    if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index, "상품코드"] not in SO_sheet.column[0]:
+                        SO_sheet[SO_row_ptr, 0] = source_product_code
+                        SO_sheet[SO_row_ptr, 1] = source_product_name_list[
+                            source_code_row_index
+                        ]
+                        SO_sheet[SO_row_ptr, 2] = source_product_link_list[
+                            source_code_row_index
+                        ]
+                        SO_row_ptr += 1
+                        print(
+                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                        )
+                        logger.info(
+                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                        )
+                    #OSO list에서는 OSO 제거
+                    idx = 0
+                    while idx < len(OSO_list):
+                        soldout_option = OSO_list[idx]
+                        if soldout_option.split()[0] == source_product_code:
+                            print(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
+                            logger.info(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
+                            del OSO_link_list[OSO_list.index(soldout_option)]
+                            OSO_list.remove(soldout_option)
+                            continue
+                        idx += 1
 
             elif OSO_count == 0:
                 source_sheet[source_code_row_index, "상태"] = "판매중"
@@ -1367,7 +1378,7 @@ def update_SO(mode):
     print(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
     logger.info(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
     SO_book.save_as(SO_filename)
-    SO_backup_filename = SO_filename[:-5] + NOW + "_BU.xlsx"
+    SO_backup_filename = SO_filename[:-5] + TODAY[-4:] + NOW[-4:] + "_BU.xlsx"
     shutil.copy2(SO_filename, SO_backup_filename)
 
     print(
