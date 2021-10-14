@@ -1434,14 +1434,23 @@ def gather_Files():
         print("추가할 파일을 선택하세요.")
         files_list.append(open_ExcelFile(f"추가할 엑셀 파일 선택 - {file_type}"))
 
+        if input("더 추가하시겠습니까? (y/n) : ") == "n":
+            break
 
+    target_row = 0
+    target_file_name = file_type + TODAY + NOW + "-t.xlsx"
+    target_sheet = pyexcel.get_sheet()
 
+    for file in files_list:
+        print(f"  >> adding data from {file}")
+        current_book = pyexcel.get_book(file_name=file)
+        current_sheet = pyexcel.get_sheet(current_book[file_type])
+        for row in range(sheet.number_of_columns()):
+            target_sheet[target_row, 0] = current_sheet[row, 0]
 
+    print(f"  =>> Total data saved to {target_file_name}")
+    target_sheet.save_as(file_name=target_file_name)
 
-
-
-
-    pass
 
 def gather_Excel():
     source_excel_filename = open_ExcelFile("정리할 엑셀 선택")
