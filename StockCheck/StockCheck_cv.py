@@ -15,6 +15,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.service import Service
 from win32com.client import Dispatch
 import re
 
@@ -30,7 +31,7 @@ CHECKED = 1
 SLG_OSO = 1
 SELL = 2
 DEFAULT_STOCK = 9
-remove_char = str.maketrans(":~()_-/[].／", "           ")
+remove_char = str.maketrans(":~()_-/[].／&", "            ")
 
 HEADER_ROW = 1 - 1
 PRODUCT_CODE_COLUMN = 2 - 1
@@ -45,8 +46,8 @@ NOW = time.strftime("_%H%M")
 SOLD_OUT_LINE = 2
 HEADER_LIST = ["연번", "상품코드", "변경상품명", "상태", "옵션입력", "옵션개수", "OSO", "업데이트", "원본경로"]
 DEFAULT_N_HEADER = len(HEADER_LIST)
-# initial_directory = "D:/Dropbox/A-TEB/작업폴더/999.품단종처리/"
-initial_directory = "C:/Users/JK/Dropbox/A-TEB/작업폴더/999.품단종처리/"
+initial_directory = "D:/Dropbox/A-TEB/작업폴더/999.품단종처리/"
+# initial_directory = "C:/Users/JK/Dropbox/A-TEB/작업폴더/999.품단종처리/"
 NO = 1
 YES = 0
 color_green = fg("light_green")
@@ -71,7 +72,7 @@ def set_Logger(name=None):
     # 4 handler instance 생성
     console = logging.StreamHandler()
 
-    log_filename = initial_directory + "log_" + TODAY + NOW + ".log"
+    log_filename = initial_directory + "Update_SO_log_" + TODAY + NOW + ".log"
     file_handler = logging.FileHandler(filename=log_filename)
 
     # 5 handler 별로 다른 level 설정
@@ -209,16 +210,29 @@ def remove_AddedChar(option):
     return re.sub(
         "(?<=[가-힣]) +(?=[가-힣])",
         "",
-        re.sub("\[.*\]|\s-\s.*",
+        re.sub("\[.*\]",
                "",re.sub("-{2,}",
                          "",
                          re.sub(
-                             r"[.,0-9]+[\uAC1C\uB0A8\uC74C\s]{3,4}",
+                             r"\s+[.,0-9]+[\uAC1C\uB0A8\uC74C\s]{3,4}",
                              "",
                              option)
                          )
                ).strip()
     )
+    # return re.sub(
+    #     "(?<=[가-힣]) +(?=[가-힣])",
+    #     "",
+    #     re.sub("\[.*\]|\s-\s.*",
+    #            "",re.sub("-{2,}",
+    #                      "",
+    #                      re.sub(
+    #                          r"\s+[.,0-9]+[\uAC1C\uB0A8\uC74C\s]{3,4}",
+    #                          "",
+    #                          option)
+    #                      )
+    #            ).strip()
+    # )
 
 
 def make_OptionInfoData(type, option_cate, option_info):
@@ -240,16 +254,33 @@ def make_OptionInfoData(type, option_cate, option_info):
         # split_option_list = re.sub(r"(?<=[가-힣]) +(?=[가-힣])", "", option.split("*"))
 
         # 옵션명이 옵션정보에 들어있으면
-        if (
-            option_cate_list[0].replace(" ","") == split_option_list[0]
-            or option_cate_list[1].replace(" ","") == split_option_list[0]
-        ):
-            option_name = remove_AddedChar(split_option_list[1].replace(",", ""))
+        # if (
+        #     option_cate_list[0] == split_option_list[0]
+        #     or option_cate_list[1] == split_option_list[0]
+        # ):
+        #     option_name = remove_AddedChar(split_option_list[1].replace(",", "").replace(":", " ").strip())
+        # else:
+        #     option_name = (
+        #         remove_AddedChar(split_option_list[0].replace(",", "").replace(":", " ").strip())
+        #         + " "
+        #         + remove_AddedChar(split_option_list[1].replace(",", "").replace(":", " ").strip())
+        #     )
+        if option_cate_list[1] == split_option_list[0]:
+            if split_option_list[1].find(":") != -1: # : 있으면; 옵션이 2단계면
+                split_option_list[0] = split_option_list[1].split(":")[0]
+                split_option_list[1] = split_option_list[1].split(":")[1]
+                option_name = (
+                    remove_AddedChar(split_option_list[0].replace(",", ""))
+                    + " "
+                    + remove_AddedChar(split_option_list[1].replace(",", ""))
+                )
+            else:
+                option_name = remove_AddedChar(split_option_list[1].replace(",", "").replace(":", " ").strip())
         else:
             option_name = (
-                remove_AddedChar(split_option_list[0].replace(",", ""))
-                + " "
-                + remove_AddedChar(split_option_list[1].replace(",", ""))
+                    remove_AddedChar(split_option_list[0].replace(",", ""))
+                    + " "
+                    + remove_AddedChar(split_option_list[1].replace(",", ""))
             )
         option_amount = int(split_option_list[5])
         option_info_list.append(option_name)
@@ -307,7 +338,7 @@ def autofit_ColumnSize(mode, target_filename):
     # excel_Visible()
 
 
-def find_SourceCode(source_code, target_code_list):
+def find_RowIndex(source_code, target_code_list):
     for index, target_code in enumerate(target_code_list):
         if source_code == target_code:
             return index
@@ -337,11 +368,11 @@ def open_SourceUpdateExcel(mode):
     logger.info(f"=> 기준 원장 엑셀 파일 선택 : {source_filename}")
 
     # 원장엑셀 백업
-    backup_filename = source_filename[:-5] + "_" + TODAY[-2:] + NOW[-4:] + "_BU.xlsx"
-    shutil.copy2(source_filename, backup_filename)
-
-    print(f"==> 백업파일 저장  : {backup_filename}")
-    logger.info(f"==> 백업파일 저장  : {backup_filename}")
+    # backup_filename = source_filename[:-5] + "_" + TODAY[-2:] + NOW[-4:] + "_BU.xlsx"
+    # shutil.copy2(source_filename, backup_filename)
+    #
+    # print(f"==> 백업파일 저장  : {backup_filename}")
+    # logger.info(f"==> 백업파일 저장  : {backup_filename}")
 
     # 수집엑셀 오픈
     if mode == "UPDATE_SB":
@@ -369,7 +400,7 @@ def create_SB():
 
     source_sheet = pyexcel.get_sheet(file_name=source_filename, name_columns_by_row=0)
 
-    target_filename = source_filename[:-5] + "_" + TODAY + NOW + "_원장.xlsx"
+    target_filename = source_filename[:-5] + "_" + TODAY + NOW + str(int(time.time()))[-3:] + "_원장.xlsx"
     max_n_option = count_MaxOptionNumber(source_sheet.column["옵션정보"])
 
     target_sheet = pyexcel.Sheet()  # 새로운 엑셀 생성
@@ -459,13 +490,14 @@ def update_SB(mode):
     source_product_code_list = source_sheet.column["상품코드"]
     source_row_ptr = source_sheet.number_of_rows()
     n_not_processed_data = 0 # 작업전으로 패스한 데이터
+    n_updated_data = 0 # 소스에 있는데 업데이트된 데이터
     n_included_data = 0 # 소스에 있어서 패스한 데이터
     n_added_data = 0 # 추가된 데이터
-
     update_product_code_list = update_sheet.column["상품코드"]
 
     for update_row_ptr, update_product_code in enumerate(update_product_code_list):
 
+        UPDATED = 0
         update_product_name = update_sheet[update_row_ptr, "변경상품명"]
         update_my_link = update_sheet[update_row_ptr, "마이링크"]
         n_option = count_OptionNumber(update_sheet[update_row_ptr, "옵션정보"])
@@ -477,6 +509,21 @@ def update_SB(mode):
         if update_product_code in source_product_code_list:
             # 상품코드가 기존 원장에 있으면
             n_included_data += 1
+            source_code_row_index = find_RowIndex(
+                update_product_code, source_product_code_list
+            )
+            #데이터 비교해서 다른 것 추가
+            if source_sheet[source_code_row_index, "변경상품명"] != update_product_name:
+                source_sheet[source_code_row_index, "변경상품명"] = update_product_name
+                print(f"  >> {n_updated_data+1} : {update_product_code} {update_product_name} 변경상품명 updated to source row {source_code_row_index}.. ")
+                UPDATED = 1
+            if source_sheet[source_row_ptr, "원본경로"] != update_sheet[update_row_ptr, update_sheet.number_of_columns() - 1]:
+                source_sheet[source_row_ptr, "원본경로"] = update_sheet[
+                    update_row_ptr, update_sheet.number_of_columns() - 1
+                ]
+                print(f"  >> {n_updated_data+1} : {update_product_code} {update_product_name} 원본경로 updated to source row {source_code_row_index}.. ")
+                UPDATED = 1
+            n_updated_data += UPDATED
             continue
         else: # 상품코드가 기존 원장에 없으면 기존 원장 끝에 추가
             source_sheet[source_row_ptr, "연번"] = source_row_ptr
@@ -508,6 +555,7 @@ def update_SB(mode):
 
     # 생성된 엑셀 저장
     print(f" =>> {n_included_data} items already included.. ")
+    print(f"   =>> {n_updated_data} items updated.. ")
     print(f" =>> not finished {n_not_processed_data} items passed.. ")
 
     print(f" =>> Finally {n_added_data} Data Updated to >> ", source_filename)
@@ -539,17 +587,23 @@ def update_SO(mode):
 
     update_product_code_list = update_sheet.column["상품코드"]
 
-    # 결과 엑셀파일 준비
+    # 결과 엑셀파일 준비 및 백업
 
-    SO_filename = source_filename[:-18] + TODAY + NOW + "_SO.xlsx"  # 품절, 판매재개 파일
+    # SO_filename = source_filename[:-18] + TODAY + NOW + "_SO.xlsx"  # 품절, 판매재개 파일
 
     # OS_backup_filename = source_filename[:-5] + "_" + TODAY[-4:] + NOW[-4:] + "_BU.xlsx" #원장 백업
-    # shutil.copy2(source_filename, OS_backup_filename)
+    backup_source_filename = source_filename[:-5] + "백업_" + NOW[-4:] + str(int(time.time()))[-3:] + ".xlsx"
+    shutil.copy2(source_filename, backup_source_filename)
+
+    # SO_backup_filename = SO_filename[:-5] + "백업_" + TODAY[-2:] + NOW[-4:] + "_BU.xlsx"
+    # shutil.copy2(SO_filename, SO_backup_filename)
 
     SO_sheet = pyexcel.Sheet()
     SO_sheet[0,0] = ""
     SO_sheet[0,1] = ""
     SA_sheet = pyexcel.Sheet()
+    SA_sheet[0, 0] = ""
+    SA_sheet[0, 1] = ""
     OSO_sheet = pyexcel.Sheet()
     OSA_sheet = pyexcel.Sheet()
 
@@ -562,6 +616,8 @@ def update_SO(mode):
     OSO_link_list = []
     OSA_list = []
     OSA_link_list = []
+
+    # backup_source_filename = source_filename[:-5] + "_" + TODAY[-2:] + NOW[-4:] + "_BU2.xlsx"
 
     for source_code_row_index, source_product_code in enumerate(
         source_product_code_list
@@ -584,7 +640,7 @@ def update_SO(mode):
         )
 
         # 업데이트 파일에 포함되어 있는 상품이면 자료 세팅
-        update_code_row_index = find_SourceCode(
+        update_code_row_index = find_RowIndex(
             source_product_code, update_product_code_list
         )
         print(
@@ -595,26 +651,30 @@ def update_SO(mode):
         )
 
         source_n_option = source_sheet[source_code_row_index, "옵션개수"]
+        source_status = source_sheet[source_code_row_index, "상태"]
+
+        if source_n_option > 0:
+            for i in range(source_n_option):
+                current_source_option_list.append(
+                    source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]
+                )
+                current_source_stock_list.append(
+                    source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3 + 1]
+                )
+                current_source_status_list.append(
+                    source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3 + 2]
+                )
+
         if update_code_row_index != -1:
-            source_n_option = int(
-                source_sheet[source_code_row_index, "옵션개수"]
-            )  # 소스 옵션개수
+            # source_n_option = int(
+            #     source_sheet[source_code_row_index, "옵션개수"]
+            # )  # 소스 옵션개수
             update_n_option = int(
                 update_sheet[update_code_row_index, "옵션개수"]
             )  # 업데이트 옵션개수
 
-            if source_n_option > 0 or update_n_option > 0:  # 옵션상품이면 옵션리스트 생성
+            if update_n_option > 0:  # 옵션상품이면 옵션리스트 생성
 
-                for i in range(source_n_option):
-                    current_source_option_list.append(
-                        source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]
-                    )
-                    current_source_stock_list.append(
-                        source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3 + 1]
-                    )
-                    current_source_status_list.append(
-                        source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3 + 2]
-                    )
                 current_update_option_list = make_OptionInfoData(
                     "UPDATE",
                     update_sheet[update_code_row_index, "옵션명"],
@@ -648,7 +708,7 @@ def update_SO(mode):
             print(color_red + "  > 전처리 1 : 업데이트 목록 포함여부 확인")
             logger.info("  > 전처리 1 : 업데이트 목록 포함여부 확인")
 
-            # update_code_row_index = find_SourceCode(
+            # update_code_row_index = find_RowIndex(
             #     source_product_code, update_product_code_list
             # )
             # source_n_option = source_sheet[source_code_row_index, "옵션개수"]
@@ -718,7 +778,9 @@ def update_SO(mode):
                 logger.info(
                     f"  > 전처리 1 => 수집 누락 있음 >> {source_product_code} {source_product_name_list[source_code_row_index]} 현재 상태 {source_sheet[source_code_row_index, '상태']}"
                 )
-                if source_sheet[source_code_row_index, "상태"] != "품절":
+
+                # if source_sheet[source_code_row_index, "상태"] != "품절":
+                if source_status != "품절":
                     source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                     source_sheet[source_code_row_index, "상태"] = "전처리품절"
                     # 품절처리목록에 추가
@@ -774,7 +836,8 @@ def update_SO(mode):
                                 logger.info(
                                     f"  > 전처리 1 => >> OSO_list에 추가 {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
                                 )
-                elif source_sheet[source_code_row_index, "상태"] == "품절":
+                elif source_status == "품절":
+                # elif source_sheet[source_code_row_index, "상태"] == "품절":
                     print(f"  > 전처리 1 => >> 업데이트 누락 + 기존 상태 품절로 PASS")
                     logger.info(f"  > 전처리 1 => >> 업데이트 누락 + 기존 상태 품절로 PASS")
                     continue
@@ -800,7 +863,8 @@ def update_SO(mode):
                 PRE2_OPTION_TYPE_CHANGED = 1
 
                 # 품절아니면 품절로 상태 변경
-                if source_sheet[source_code_row_index, "상태"] != "품절":
+                if source_status != "품절":
+                # if source_sheet[source_code_row_index, "상태"] != "품절":
                     source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                     source_sheet[source_code_row_index, "상태"] = "전처리품절"
 
@@ -970,7 +1034,7 @@ def update_SO(mode):
 
         # 메인: 소스와 업데이트에 모두 있는 옵션은 업데이트하고 품절/판매중처리
 
-        if mode == "UPDATE_SO_P" and find_SourceCode(source_product_code, update_product_code_list) == -1: # 모드 T + 소스에 없으면
+        if mode == "UPDATE_SO_P" and find_RowIndex(source_product_code, update_product_code_list) == -1: # 모드 T + 소스에 없으면
             print(color_green + "  > 메인 =>> 실행모드에 의거 미수행")
             logger.info("  > 메인 =>> 실행모드에 의거 미수행")
             continue
@@ -1149,31 +1213,40 @@ def update_SO(mode):
                     ] = "품절"
                     continue
 
-                # 현재 옵션이 업데이트옵션목록에 없으면 품절처리하고 다음옵션으로 ; 윗줄 전처리때문에 실제로는 실행되지 않음.
+                # 현재 옵션이 업데이트옵션목록에 없는데 품절이 아니면 품절처리하고 다음옵션으로
                 if current_source_option not in current_update_option_list:
-                    OSO_list.append(
-                        source_sheet[source_code_row_index, "상품코드"]
-                        + " "
-                        + current_source_option
-                    )
-                    OSO_link_list.append(source_sheet[source_code_row_index, "원본경로"])
-                    OSO_count += 1
-                    source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
-                    source_sheet[
-                        source_code_row_index,
-                        DEFAULT_N_HEADER + current_source_option_index * 3 + 1,
-                    ] = 0
-                    source_sheet[
-                        source_code_row_index,
-                        DEFAULT_N_HEADER + current_source_option_index * 3 + 2,
-                    ] = "품절"
-                    print(
-                        f"  **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없어 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}"
-                    )
-                    logger.info(
-                        f" **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없어 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}"
-                    )
-                    continue
+                    if current_source_option_status != "품절":
+                        OSO_list.append(
+                            source_sheet[source_code_row_index, "상품코드"]
+                            + " "
+                            + current_source_option
+                        )
+                        OSO_link_list.append(source_sheet[source_code_row_index, "원본경로"])
+                        OSO_count += 1
+                        source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
+                        source_sheet[
+                            source_code_row_index,
+                            DEFAULT_N_HEADER + current_source_option_index * 3 + 1,
+                        ] = 0
+                        source_sheet[
+                            source_code_row_index,
+                            DEFAULT_N_HEADER + current_source_option_index * 3 + 2,
+                        ] = "품절"
+                        print(
+                            f"  **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없어 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}"
+                        )
+                        logger.info(
+                            f" **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없어 품절처리 >> OSO_list에 추가 OSO {OSO_count} : {current_source_option}"
+                        )
+                        continue
+                    else: # 이미 품절상태면 OSO 리스트에는 미추가
+                        print(
+                            f"  **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없는데 기존 상태가 품절{current_source_option_status} >> OSO_list에 미추가 >> PASS"
+                        )
+                        logger.info(
+                            f"  **> 메인 => 옵션상품 >> 소스옵션이 업데이트목록에 없는데 기존 상태가 품절{current_source_option_status} >> OSO_list에 미추가 >> PASS"
+                        )
+                        continue
                 # 소ㅅ, 업데이트 옵션 비교
                 for current_update_option_index, current_update_option in enumerate(
                     current_update_option_list
@@ -1208,19 +1281,6 @@ def update_SO(mode):
                             source_sheet[source_code_row_index, "업데이트"] = TODAY + NOW
                             # 품절->판매중 변경시 판매재개로
                             if current_source_option_status == "품절":
-
-                                OSA_list.append(
-                                    source_sheet[source_code_row_index, "상품코드"]
-                                    + " "
-                                    + current_source_option
-                                )
-                                OSA_link_list.append(source_sheet[source_code_row_index, "원본경로"])
-                                print(
-                                    f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> OSA_list에 추가 : {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
-                                )
-                                logger.info(
-                                    f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> OSA_list에 추가 : {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
-                                )
                                 # 상품도 추가 수집 리스트에 추가; 불필요 할 수도...
                                 if SA_ADDED == 0:
                                     SA_sheet[SA_row_ptr, 0] = source_product_code
@@ -1237,7 +1297,7 @@ def update_SO(mode):
                                     logger.info(
                                         f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> SA_sheet에 추가 {SA_row_ptr - 1} -> {SA_row_ptr} : {source_product_code} {source_product_name_list[source_code_row_index]}"
                                     )
-                                    SA_ADDED = 1
+                                    SA_ADDED = 1 # SA리스트에 한번만 추가
                                 source_sheet[
                                     source_code_row_index,
                                     DEFAULT_N_HEADER
@@ -1250,6 +1310,29 @@ def update_SO(mode):
                                     + current_source_option_index * 3
                                     + 2,
                                 ] = "판매중"
+                                # 상품수집하지 않고 이미 옵션품절된 상품은 셀러고로 판매재개 하기 위해 SA리스트에 있더라도 OSA 리스트 중복 사용
+                                # 불필요하면 아래 if 활성화 하고 블럭 조정
+                                    # if source_product_code not in SA_sheet.column[0]:
+                                    # 상품코드가 SA 리스트에 없으면 OSA 리스트에 추가
+                                OSA_list.append(
+                                    source_sheet[source_code_row_index, "상품코드"]
+                                    + " "
+                                    + current_source_option
+                                )
+                                OSA_link_list.append(source_sheet[source_code_row_index, "원본경로"])
+                                print(
+                                    f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> OSA_list에 추가 : {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
+                                )
+                                logger.info(
+                                    f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> OSA_list에 추가 : {source_product_code} {source_sheet[source_code_row_index, DEFAULT_N_HEADER + i * 3]}"
+                                )
+                                # else:
+                                #     print(
+                                #         f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> SA 리스트에 기 추가로 OSA_list에 미추가"
+                                #     )
+                                #     logger.info(
+                                #         f"  > 메인 => 옵션상품 >> 옵션 비교중 >> {current_source_option} >> 품절 -> 판매중 처리 >> SA 리스트에 기 추가로 OSA_list에 미추가"
+                                #     )
                                 break
                             elif current_source_option_status != "품절":
                                 print(
@@ -1344,19 +1427,33 @@ def update_SO(mode):
                 f'   ==> 옵션상품 {source_sheet[source_code_row_index, "상태"]} : 옵션 {source_n_option}개 중 {OSO_count}개 품절'
             )
             if OSO_count == source_n_option:
-                print(f"   ----> >> 전체옵션 품절 처리")
-                logger.info(f"   ----> >> 전체옵션 품절 처리")
-                if source_sheet[source_code_row_index, "상태"] == "품절":
+                print(f"   ----> >> 상품상태 품절 처리")
+                logger.info(f"   ----> >> 상품상태 품절 처리")
+                #OSO list에서는 OSO 제거
+                idx = 0
+                while idx < len(OSO_list):
+                    soldout_option = OSO_list[idx]
+                    if soldout_option.split()[0] == source_product_code:
+                        print(f"   ----> >> 상품상태 품절 처리 => OSO_list에서 {OSO_list[idx]} 제거")
+                        logger.info(f"   ----> >> 상품상태 품절 처리 => OSO_list에서 {OSO_list[idx]} 제거")
+                        del OSO_link_list[OSO_list.index(soldout_option)]
+                        OSO_list.remove(soldout_option)
+                        continue
+                    idx += 1
+                if source_status == "품절":
+                # if source_sheet[source_code_row_index, "상태"] == "품절":
                     # 기존에 상품상태가 품절로 이미 되어 있으면 PASS
-                    print(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
-                    logger.info(f"   ----> >> 전체옵션 품절 처리 => 상품 상태 이미 품절로 미추가")
+                    print(f"   ----> >> 상품상태 품절 처리 => 상품 상태 이미 품절로 미추가")
+                    logger.info(f"   ----> >> 상품상태 품절 처리 => 상품 상태 이미 품절로 미추가")
                 else:
                     # 기존에 품절이 아니면 품절로 변경하고 SO 리스트에 추가
-                    print(f"   ----> >> 전체옵션 품절 처리")
-                    logger.info(f"   ----> >> 전체옵션 품절 처리")
+                    print(f"   ----> >> 상품상태 품절 처리 => {source_status} >> 품절로 변경")
+                    logger.info(f"   ----> >> 상품상태 품절 처리 => {source_status} >> 품절로 변경")
                     source_sheet[source_code_row_index, "상태"] = "품절"
                     #SO list에 없으면 SO에 추가
                     if len(SO_sheet.column[0]) == 0 or source_sheet[source_code_row_index, "상품코드"] not in SO_sheet.column[0]:
+                        # if source_status != "품절":
+                        # if source_sheet[source_code_row_index, "상태"] != "품절":
                         SO_sheet[SO_row_ptr, 0] = source_product_code
                         SO_sheet[SO_row_ptr, 1] = source_product_name_list[
                             source_code_row_index
@@ -1366,31 +1463,20 @@ def update_SO(mode):
                         ]
                         SO_row_ptr += 1
                         print(
-                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                            f"   >>>>>> >> 상품상태 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
                         )
                         logger.info(
-                            f"   ----> >> 전체옵션 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
+                            f"   >>>>>> >> 상품상태 품절 처리 => SO_sheet에 {SO_row_ptr - 1} -> {SO_row_ptr} : {source_product_code}, {source_product_name_list[source_code_row_index]} 추가"
                         )
-                    #OSO list에서는 OSO 제거
-                    idx = 0
-                    while idx < len(OSO_list):
-                        soldout_option = OSO_list[idx]
-                        if soldout_option.split()[0] == source_product_code:
-                            print(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
-                            logger.info(f"   ----> >> 전체옵션 품절 처리 => OSO_list에서  {OSO_list[idx]} 제거")
-                            del OSO_link_list[OSO_list.index(soldout_option)]
-                            OSO_list.remove(soldout_option)
-                            continue
-                        idx += 1
 
-            elif OSO_count == 0:
+            elif OSO_count == 0 and ("품절" not in current_source_status_list and "전처리품절" not in current_source_status_list):
                 source_sheet[source_code_row_index, "상태"] = "판매중"
-                print(f"   ----> >> 전체옵션 판매중 처리")
-                logger.info(f"   ----> >> 전체옵션 판매중 처리")
+                print(f"   >>>>>> >> OSO count 0 + 옵션(전처리)품절 없음 >> 상품상태 판매중 처리")
+                logger.info(f"   >>>>>> >> OSO count 0 + 옵션(전처리)품절 없음 >> 상품상태 판매중 처리")
             else:
                 source_sheet[source_code_row_index, "상태"] = "옵션품절"
-                print(f"   ----> >> 전체옵션 옵션품절 처리")
-                logger.info(f"   ----> >> 전체옵션 옵션품절 처리")
+                print(f"   >>>>>> >> 상품상태 옵션품절 처리")
+                logger.info(f"   >>>>>> >> 상품상태 옵션품절 처리")
             print(reset)
 
     for row_ptr, OSO in enumerate(OSO_list):
@@ -1410,25 +1496,50 @@ def update_SO(mode):
 
     SO_book = SO_sheet + SA_sheet + OSO_sheet + OSA_sheet
 
+    updated_TODAY = time.strftime("%Y%m%d")[-5:]
+    updated_NOW = time.strftime("_%H%M")
+
+    updated_source_filename = source_filename[:-21] + updated_TODAY + updated_NOW + str(int(time.time()))[-3:] + "_원장.xlsx"
+    SO_filename = updated_source_filename[:-8] + "_SO.xlsx"
+
     # 생성된 엑셀 저장
     print(reset)
-    print("\nOriginal Data Saved to >>", source_filename)
-    logger.info(f"\nOriginal Data Saved to >> {source_filename}")
+    print("\nOriginal Data : >>", source_filename)
+    logger.info(f"\nOriginal Data :  >> {source_filename}")
+
+    # backup_source_filename = source_filename[:-5] + "_" + TODAY[-2:] + NOW[-4:] + "_BU2.xlsx"
+
+    print(f"\nUpdated Data Saved to >> {updated_source_filename}")
+    logger.info(f"\nUpdated Data Saved to >> {updated_source_filename}")
+
+    print(f"Backup Data Saved to >> {backup_source_filename}")
+    logger.info(f"Backup Data Saved to >> {backup_source_filename}")
+
     print(
         f"  Total {len(source_product_code_list)} items / {len(update_product_code_list)} items checked.."
     )
     logger.info(
         f"  Total {len(source_product_code_list)} items / {len(update_product_code_list)} items checked.."
     )
-    source_sheet.save_as(source_filename)
+    # source_sheet.save_as(source_filename)
+    source_sheet.save_as(updated_source_filename)
+
+    print(f"\nChecked Data from << {update_filename}")
+    logger.info(f"\nChecked Data from << {update_filename}")
 
     print("\nProcessed Data Saved to >>", SO_filename)
     logger.info(f"\nProcessed Data Saved to >> {SO_filename}")
+
+    SO_book.save_as(SO_filename)
+    # SO_backup_filename = SO_filename[:-5] + "백업_" + TODAY[-2:] + NOW[-4:] + str(int(time.time()))[-3:] + ".xlsx"
+    SO_backup_filename = SO_filename[:-5] + "백업_" + NOW[-4:] + str(int(time.time()))[-3:] + ".xlsx"
+    shutil.copy2(SO_filename, SO_backup_filename)
+
+    print(f"Backup Data Saved to >> {SO_backup_filename}")
+    logger.info(f"Backup Data Saved to >> {SO_backup_filename}")
+
     print(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
     logger.info(f"  {SO_row_ptr} items SOLD OUT.. {SA_row_ptr} items Restocked")
-    SO_book.save_as(SO_filename)
-    SO_backup_filename = SO_filename[:-5] + "_" + TODAY[-4:] + NOW[-4:] + "_BU.xlsx"
-    shutil.copy2(SO_filename, SO_backup_filename)
 
     print(
         f"  {len(OSO_list)} option items SOLD OUT.. {len(OSA_list)} option items Restocked.."
@@ -1462,7 +1573,7 @@ def make_Link():
         print(f"    ==> link from : {link_filename}")
         print(f"    ==> target file : {target_filename}")
         for i in range(len(SA_list)):
-            row_ptr = find_SourceCode(SA_list[i], link_sheet.column["상품코드"])
+            row_ptr = find_RowIndex(SA_list[i], link_sheet.column["상품코드"])
             if row_ptr != -1:
                 print(
                     f"       >> {i} : {SA_list[i]} -> {row_ptr} : {link_sheet[row_ptr, '상품코드']} {link_sheet[row_ptr, '변경상품명']} {link_sheet[row_ptr, '원본경로']}"
@@ -1586,7 +1697,9 @@ def handle_Target(mode, filename, target_option_list):
     # 2. 초기화
 
     # options = Options()
-    browser = webdriver.Chrome("./chromedriver.exe", options=Options())
+    service = Service("./chromedriver.exe")
+    # browser = webdriver.Chrome("./chromedriver.exe", options=Options())
+    browser = webdriver.Chrome(service=service, options=Options())
 
     try:
         ##. 셀러고 이동
